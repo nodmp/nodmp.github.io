@@ -1,0 +1,2 @@
+User-Agent: *
+Sitemap: https://clientinfra.com/sitemap.xml
