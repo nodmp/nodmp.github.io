@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Kernel on Client Infra</title><link>https://clientinfra.com/blog/kernel/</link><description>Recent content in Kernel on Client Infra</description><generator>Hugo -- gohugo.io</generator><language>zh-cn</language><lastBuildDate>Thu, 22 Jun 2023 00:00:00 +0800</lastBuildDate><atom:link href="https://clientinfra.com/blog/kernel/index.xml" rel="self" type="application/rss+xml"/><item><title>使用 VScode 阅读 Android Kernel 代码并调试</title><link>https://clientinfra.com/read-android-kernel-source-code-with-vsccode/</link><pubDate>Thu, 22 Jun 2023 00:00:00 +0800</pubDate><guid>https://clientinfra.com/read-android-kernel-source-code-with-vsccode/</guid><description>在上一篇文章中介绍了如何编译并调试内核，当读者想阅读代码或者修改代码时会发现，没有任何代码提示和跳转。当调试内核的时候又发现，gdb命令太多了十分不方便,让人不禁怀念有他———IDE的日子，那是多么惬意的时光。
+前置知识 语言服务器协议（Language Server Protocol/LSP） 语言服务器协议（LSP）定义了编辑器或IDE与语言服务器之间使用的协议，语言服务器提供了自动完成、跳转定义、查找引用等语言功能。
+为什么要提出语言服务器协议并增加语言服务器呢？ 很久以前各IDE各自为营，例如Eclipse CDT（主要在Eclipse中提供C/C++支持）是由Java编写，如果一个使用TypeScript编写的IDE（例如：Visual Studio Code）想提供C/C++的支持就需要自己使用TypeScript重新写一套。
+为了改善这样的局面，微软提出了LSP，将语言支持和编辑器之间增加一层抽象，编辑器/IDE只要实现LSP协议就拥有了复杂的语言支持功能，而对于语言服务器同样只需要关注实现LSP协议，而不限定使用何种语言。
+关于更多语言服务器以及支持LSP的IDE列表，请查看微软LSP官网
+“Any problem in computer science can be solved by another layer of indirection.”
+Clangd Clangd是一个C++的语言服务器，他为C++语言提供了代码完成、编译错误、转到定义等功能。
+下面是一个带有Clangd插件的Vs code,演示了代码完成功能： 安装 clangd 如果你本地有NDK环境,在NDK目录下已经有了clangd（/toolchains/llvm/prebuilt/linux-x86_64/bin/clangd）可以直接使用，如果想要独立安装，请查看文档
+VScode安装clangd插件 可以直接在VScode中选择View-&amp;gt;Extensions打开插件管理，然后搜索&amp;quot;clangd&amp;ldquo;单击安装
+官方推荐Make sure the Microsoft C/C++ extension is **not** installed这里先忽略，在稍后配置文件中禁用。
+安装后需要重载窗口，Ctrl+Shift+P并输入Reload Window
+compile_commands.json 为了让clangd能够理解你的源代码，clangd需要知道你的构建标志，而这些信息通常由compile_commands.json文件来记录，这个文件中记录了编译中每个源代码的编译命令，通常由编译系统自动生成。
+CMAKE通过传递CMAKE_EXPORT_COMPILE_COMMANDS=1来生成compile_commands.json Bazel通过bazel-compile-commands-extractor来生成compile_commands.json 对于make编译的项目，可以通过Bear来生成compile_commands.json 在拥有compile_commands.json文件后，可以通过--compile-commands-dir选项来指定数据库地址。
+VScode搭建源码阅读环境 Android Kernel生成compile_commands.json 本章的Android Kernel源码环境搭建参照上一篇文章
+经过前置知识的介绍，为了让clangd了解Android Kernel，需要生成一个compile_commands.json文件，上文中介绍了Android Kernel的构建系统为bazel，所以自然想到使用bazel-compile-commands-extractor来生成compile_commands.json文件，Android官方早就想到了开发者有这样的需求，所以早就预制了一个target kernel_compile_commands并在build/kernel/kleaf/common_kernels.bzl中实现了该target。
+在Android Kernel根目录直接运行tools/bazel run //common:kernel_x86_64_compile_commands就会在根目录下生成compile_commands.json。
+源码导入VScode 直接使用VScode打开common目录，这时候只能简单的查看文件，并没有代码提示等功能 Ctrl+Shift+P并输入Open Workspece Settings(JSON) 并选择，VScode会在根目录下生成.</description></item><item><title>Android Kernel 编译与调试指北</title><link>https://clientinfra.com/android-kernel-build-and-debug/</link><pubDate>Wed, 14 Jun 2023 00:00:00 +0800</pubDate><guid>https://clientinfra.com/android-kernel-build-and-debug/</guid><description>上一篇文章介绍了在wsl2环境下编译AOSP并将其运行到Cuttlefish中，本篇文章依赖于上文Cuttlefish，请按照顺序食用本指北
+环境 本指北基于以下代码和环境编写
+OS : Ubuntu 22.04.2 LTS AOSP : master kernel : 根据编译目标决定 target ： aosp_cf_x86_64_phone-userdebug 设备 ： Cuttlefish 在前一篇文章说过，因为工具链的原因，AOSP的代码不宜太旧，自上一篇文章以来Cuttlefish的功能和文档逐步健全，足以见得google对其的投入程度，所以如果版本不一样会遇见无此参数等这样那样的问题，本文在master上测试通过。
+Android Kernel Repo的源码下载 Linux Kernel是Android系统运行的基础，而Linux Kernel的源码在AOSP中并不存在，通常存在的是预构建的内核映像，如果想对内核做一些定制化的修改，就需要下载代码并构建，Linux Kernel像AOSP有各种各样的分支，并不是随便选择一个分支构建就可以正常运行。编译AOSP对应的Linux Kernel版本才能避免构建过程走很多弯路。每一个AOSP构建目标都预置了预编译的内核映像，可以从内核影像中获取相应版本的蛛丝马迹。
+需要说明的是Android的内核项目同样是由repo(https://android.googlesource.com/kernel/manifest/) 管理的，其中Linux Kernel的源码存在于kernel/common(https://android.googlesource.com/kernel/common/) 目录下，其他目录是与构建相关的工具链或者脚本等，在之前旧版本Linux Kernel构建中可以直接下载kernel/common的代码使用make直接编译出内核镜像，但是随着Android GKI的推出，这套方法就行不通了。读者最好使用repo提供的编译脚本等进行构建。
+下面以aosp_cf_x86_64_phone-userdebugtarget为例，讲述如何一步步找到对应的分支
+查找Linux Kernel的version和commitId 从Android设置界面查找 如果你编译的系统已经成功运行到虚拟机，你可以打开Settings - About Phone - Android Version -Kernel Version 可以看到对应的Kernel信息，Linux的版本号按照major.minor.patch-build.desc的格式，通过匹配屏幕输出可以得出内核版本为6.1，从附加描述中提取g开头的连续字符可以得知对应的commitId为963667856ef1
+从AOSP树中查找 如果只有一个构建目标（aosp_cf_x86_64_phone-userdebug）并没有运行成功虚拟机，可以遵循以下步骤获取。
+索引到device/google/cuttlefish目录，device目录下存放了芯片和硬件厂商的相关产品配置,其中cuttlefish作为一款虚拟器，也被添加到了该目录下。 通过mgrep &amp;quot;:kernel&amp;quot;查看配置文件（该方法不是很通用，可以通过“添加新设备”了解相关知识），最后查看搜索到的配置文件,通过下图可以看到该目标链接的kernel映像文件位于kernel/prebuilts/6.1/x86_64/kernel-6.1 对该文件执行file kernel-6.1得到以下输出，同样可以得到commmitId为963667856ef1 kernel-6.1: Linux kernel x86 boot executable bzImage, version 6.1.25-android14-7-00377-g963667856ef1-ab10271074 (build-user@build-host) #1 SMP PREEMPT Tue Jun 6 23:03:20 UTC 2023, RO-rootFS, swap_dev 0X10, Normal VGA 根据分支拉取Kernel代码 通过上面的操作得到了Linux Kernel的版本和commitId，准备就绪就可以着手拉取代码了，需要注意上文获取的commitId是指https://android.</description></item></channel></rss>
